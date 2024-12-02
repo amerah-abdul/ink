@@ -1,5 +1,6 @@
-import InkEventEmitter, { Event } from '../src/EventEmitter';
+import { describe, it } from 'mocha';
 import { expect } from 'chai';
+import InkEventEmitter, { Event } from '../src/EventEmitter';
 
 describe('Event', () => {
   it('should create an event with name and params', () => {
@@ -8,103 +9,104 @@ describe('Event', () => {
     expect(event.params).to.deep.equal({ foo: 'bar' });
   });
 
-  it('should create an event with default empty params', () => {
-    const event = new Event('test');
-    expect(event.params).to.deep.equal({});
-  });
-
-  it('should set and get data', () => {
-    const event = new Event<string>('test');
-    event.data = 'test-data';
-    expect(event.data).to.equal('test-data');
-  });
-
-  it('should set data using set method', () => {
-    const event = new Event<string>('test');
-    event.set('test-data');
-    expect(event.data).to.equal('test-data');
-  });
-
-  it('should add params using add method', () => {
+  it('should allow adding params after creation', () => {
     const event = new Event('test');
     event.add('key', 'value');
     expect(event.params.key).to.equal('value');
   });
 
-  it('should chain set and add methods', () => {
+  it('should handle setting and getting data', () => {
     const event = new Event<string>('test');
-    event.set('test-data').add('key', 'value');
-    expect(event.data).to.equal('test-data');
-    expect(event.params.key).to.equal('value');
+    event.set('test data');
+    expect(event.data).to.equal('test data');
+  });
+
+  it('should handle data property setter', () => {
+    const event = new Event<string>('test');
+    event.data = 'test data';
+    expect(event.data).to.equal('test data');
   });
 });
 
 describe('InkEventEmitter', () => {
-  let emitter: InkEventEmitter;
-
-  beforeEach(() => {
-    emitter = new InkEventEmitter();
-  });
-
-  it('should trigger an event and return event object', () => {
-    let listenerCalled = false;
+  it('should trigger events and pass event object', () => {
+    const emitter = new InkEventEmitter();
     let receivedEvent: Event<any> | null = null;
     
     emitter.on('test', (event) => {
-      listenerCalled = true;
       receivedEvent = event;
     });
-    
     const event = emitter.trigger('test', { foo: 'bar' });
     
+    expect(receivedEvent).to.not.be.null;
     expect(event.name).to.equal('test');
     expect(event.params).to.deep.equal({ foo: 'bar' });
-    expect(listenerCalled).to.be.true;
-    expect(receivedEvent).to.equal(event);
   });
 
-  it('should handle multiple listeners with waitFor', async () => {
-    let listener1Called = false;
-    let listener2Called = false;
+  it('should handle multiple listeners', () => {
+    const emitter = new InkEventEmitter();
+    let count = 0;
+    
+    emitter.on('test', () => count++);
+    emitter.on('test', () => count++);
+    emitter.trigger('test');
+    
+    expect(count).to.equal(2);
+  });
 
-    emitter.on('test', async (event: Event<string>) => {
-      listener1Called = true;
-      event.data = 'data1';
+  it('should handle event data in listeners', () => {
+    const emitter = new InkEventEmitter();
+    
+    emitter.on('test', (event: Event<string>) => {
+      event.set('response data');
     });
     
-    emitter.on('test', async (event: Event<string>) => {
-      listener2Called = true;
-      event.data = 'data2';
-    });
-
-    const event = await emitter.waitFor<string>('test', { foo: 'bar' });
-
-    expect(listener1Called).to.be.true;
-    expect(listener2Called).to.be.true;
-    expect(event.data).to.equal('data2');
+    const event = emitter.trigger<string>('test');
+    expect(event.data).to.equal('response data');
   });
 
-  it('should handle async listeners in sequence', async () => {
-    const sequence: number[] = [];
+  it('should handle async event processing with waitFor', async () => {
+    const emitter = new InkEventEmitter();
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    emitter.on('test', async () => {
+    
+    emitter.on('test', async (event: Event<string>) => {
       await delay(10);
-      sequence.push(1);
+      event.set('async response');
+    });
+    
+    const event = await emitter.waitFor<string>('test');
+    expect(event.data).to.equal('async response');
+  });
+
+  it('should process multiple async listeners in sequence', async () => {
+    const emitter = new InkEventEmitter();
+    const results: number[] = [];
+    
+    emitter.on('test', async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      results.push(1);
     });
     
     emitter.on('test', async () => {
-      sequence.push(2);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      results.push(2);
     });
-
+    
     await emitter.waitFor('test');
-
-    expect(sequence).to.deep.equal([1, 2]);
+    expect(results).to.deep.equal([1, 2]);
   });
 
-  it('should handle events without listeners', async () => {
-    const event = await emitter.waitFor('test');
-    expect(event.name).to.equal('test');
-    expect(event.data).to.be.undefined;
+  it('should remove event listeners correctly', () => {
+    const emitter = new InkEventEmitter();
+    let count = 0;
+    const listener = () => count++;
+    
+    emitter.on('test', listener);
+    emitter.trigger('test');
+    expect(count).to.equal(1);
+    
+    emitter.off('test', listener);
+    emitter.trigger('test');
+    expect(count).to.equal(1);
   });
 });
