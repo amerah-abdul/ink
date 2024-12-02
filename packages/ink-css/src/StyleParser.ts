@@ -5,7 +5,7 @@ import FileLoader from '@stackpress/types/dist/filesystem/FileLoader';
 import Exception from './Exception';
 
 //ie. abc, abc-1def, abc-1def-2ghi, ...
-export const pattern = /[a-z]+\-{0,2}([a-z0-9]+\-{0,2})*/g;
+export const pattern = /class="([^"]+)"/g;
 
 /**
  * A class for parsing classnames from a string.
@@ -16,10 +16,22 @@ export default class Parser {
    * within the given content.
    */
   public static match(content: string) {
-    //get all matches
-    const matches = content.match(pattern);
+    const classPattern = /[a-z]+(?:-[a-z0-9]+)*/g;
+    const matches = [];
+    let match;
+    
+    // Find all class attributes
+    while ((match = pattern.exec(content)) !== null) {
+      const classContent = match[1];
+      // Extract individual class names
+      let classMatch;
+      while ((classMatch = classPattern.exec(classContent)) !== null) {
+        matches.push(classMatch[0]);
+      }
+    }
+    
     //return unique matches
-    return matches ? Array.from(new Set(matches)) : [];
+    return Array.from(new Set(matches));
   }
 
   //the current working directory
@@ -78,7 +90,7 @@ export default class Parser {
     //whether relative or using @ directive, find the absolute path
     const absolute = this._loader.absolute(file, pwd);
     //if the file is already in the cache
-    if (!this._vfs.has(absolute)) {
+    if (this._vfs.has(absolute)) {
       return this;
     }
     //if the file does not exist
